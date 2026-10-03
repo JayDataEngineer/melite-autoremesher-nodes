@@ -1,0 +1,5 @@
+# melite-autoremesher-nodes — deps BEYOND the engine base
+# env. The AutoRemesh binary itself is a declared artifact, not a
+# pip package. Manager reads this file on install.
+trimesh
+pyyaml
