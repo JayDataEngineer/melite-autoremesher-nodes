@@ -1,0 +1,4 @@
+# Budget class preset (pack-local since 2026-10-13 — the audit
+# found load_presets() silently returning {} on any install
+# outside the dev checkout). Stem = preset id.
+target_quads: 20000

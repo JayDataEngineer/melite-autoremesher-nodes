@@ -56,6 +56,14 @@ def find_binary() -> str:
 
 
 def presets_dir() -> Path:
+    """Pack-local presets/ FIRST (the 2026-10-13 audit's blocker: the
+    old path walked to the dev checkout's plugins/ tree, which exists
+    on no install — load_presets() silently returned {} and every
+    budget class vanished). The dev-checkout path stays as fallback
+    so an in-tree iteration keeps working."""
+    local = Path(__file__).resolve().parent / "presets"
+    if local.is_dir():
+        return local
     return _repo_root() / "plugins" / "melite-3d" / "models" / "3d" / "autoremesher" / "presets"
 
 
@@ -163,6 +171,11 @@ class AutoRemesher:
 
     @classmethod
     def INPUT_TYPES(cls):
+        # Fail at WIRING time, not run time (the audit's fresh-box
+        # finding: the binary is a host build artifact — AUTOREMESHER_BIN
+        # or a references/autoremesher build — and the old code let a
+        # user wire the whole graph before find_binary() raised).
+        find_binary()
         preset_ids = sorted(load_presets().keys())
         return {
             "required": {
