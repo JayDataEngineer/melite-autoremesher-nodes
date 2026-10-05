@@ -31,27 +31,60 @@ except ImportError:  # standalone tooling/tests, never inside ComfyUI
     folder_paths = None
 
 
-def _repo_root() -> Path:
-    """Walk up from the pack until references/autoremesher exists (works
-    in-tree and when symlinked into a ComfyUI install)."""
+# The estate door's landing: `pnpm run provision -- sync` in the melite
+# repo fetches + sha-verifies the pinned release asset
+# (autoremesher-d9ef96bd, built from huxingyi/autoremesher @ d9ef96bd,
+# attached to this pack's own GitHub releases) into
+# <melite>/data/runtime/autoremesher/. Under the managed runtime the
+# engine runs at <melite>/data/runtime/comfyui, so from
+# custom_nodes/<pack>/nodes.py the landing is three parents up, one
+# sibling over. A dev checkout's references/autoremesher build still
+# wins when present (in-tree iteration keeps working); a pack outside
+# both layouts has no candidate — None, not a crash.
+_ESTATE_RUNTIME = (
+    Path(__file__).resolve().parents[3] / "autoremesher"
+    if len(Path(__file__).resolve().parents) > 3 else None
+)
+
+
+def _dev_checkout_build() -> Path | None:
+    """The dev checkout's gitignored build (references/autoremesher),
+    when this pack sits inside the melite repo tree."""
     here = Path(__file__).resolve().parent
     for cand in (here, *here.parents):
-        if (cand / "references" / "autoremesher").is_dir():
-            return cand
-    return here
+        build = cand / "references" / "autoremesher" / "build" / "autoremesher"
+        if build.is_file():
+            return build
+    return None
 
 
 def find_binary() -> str:
+    # 1. Explicit env var — the estate boot line exports it
+    #    (provision boot-cmd prints AUTOREMESHER_BIN=<landing>)
     env = os.environ.get("AUTOREMESHER_BIN")
     if env and os.path.isfile(env):
         return env
-    cand = _repo_root() / "references" / "autoremesher" / "build" / "autoremesher"
-    if cand.is_file() and os.access(cand, os.X_OK):
-        return str(cand)
+
+    # 2. The dev checkout's build, then the estate provision landing
+    candidates = [
+        *([p] if (p := _dev_checkout_build()) is not None else []),
+        *([] if _ESTATE_RUNTIME is None
+          else [_ESTATE_RUNTIME / "autoremesher"]),
+    ]
+    for cand in candidates:
+        if cand.is_file() and os.access(cand, os.X_OK):
+            return str(cand)
+
     raise RuntimeError(
-        "autoremesher binary not found (looked at " + str(cand) +
-        "). Build it: cd references/autoremesher && mkdir build && cd build && "
-        "cmake .. && make. Or set AUTOREMESHER_BIN."
+        "autoremesher binary not found. The estate installs it:\n"
+        "  pnpm run provision -- sync\n"
+        "(fetches + sha-verifies the pinned asset autoremesher-d9ef96bd from\n"
+        " github.com/JayDataEngineer/melite-autoremesher-nodes releases into\n"
+        " data/runtime/autoremesher/), then boot the engine through the\n"
+        "estate (provision boot-cmd) — the boot line exports AUTOREMESHER_BIN\n"
+        "pointing at the landing. Or set AUTOREMESHER_BIN yourself to a binary\n"
+        "you built.\n"
+        f"Checked: env AUTOREMESHER_BIN, {[str(c) for c in candidates]}"
     )
 
 
