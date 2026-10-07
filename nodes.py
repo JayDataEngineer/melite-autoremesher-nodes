@@ -59,13 +59,20 @@ def _dev_checkout_build() -> Path | None:
 
 
 def find_binary() -> str:
-    # 1. Explicit env var — the estate boot line exports it
-    #    (provision boot-cmd prints AUTOREMESHER_BIN=<landing>)
+    # 1. Explicit env var — an operator-built binary overrides everything
     env = os.environ.get("AUTOREMESHER_BIN")
     if env and os.path.isfile(env):
         return env
 
-    # 2. The dev checkout's build, then the estate provision landing
+    # 2. The pack's own install.py landing — Manager runs it on
+    #    install; it fetches + sha-verifies the pinned release asset
+    #    into this pack's native/ directory. A plain ComfyUI with
+    #    this pack Manager-installed converges here, estate or not.
+    pack_local = Path(__file__).resolve().parent / "native" / "autoremesher"
+    if pack_local.is_file() and os.access(pack_local, os.X_OK):
+        return str(pack_local)
+
+    # 3. The dev checkout's build, then the estate provision landing
     candidates = [
         *([p] if (p := _dev_checkout_build()) is not None else []),
         *([] if _ESTATE_RUNTIME is None
@@ -76,15 +83,10 @@ def find_binary() -> str:
             return str(cand)
 
     raise RuntimeError(
-        "autoremesher binary not found. The estate installs it:\n"
-        "  pnpm run provision -- sync\n"
-        "(fetches + sha-verifies the pinned asset autoremesher-d9ef96bd from\n"
-        " github.com/JayDataEngineer/melite-autoremesher-nodes releases into\n"
-        " data/runtime/autoremesher/), then boot the engine through the\n"
-        "estate (provision boot-cmd) — the boot line exports AUTOREMESHER_BIN\n"
-        "pointing at the landing. Or set AUTOREMESHER_BIN yourself to a binary\n"
-        "you built.\n"
-        f"Checked: env AUTOREMESHER_BIN, {[str(c) for c in candidates]}"
+        "autoremesher binary not found. The pack's install.py fetches\n"
+        "it (re-run the ComfyUI-Manager install), or set\n"
+        "AUTOREMESHER_BIN to a binary you built.\n"
+        f"Checked: env AUTOREMESHER_BIN, {pack_local}, {[str(c) for c in candidates]}"
     )
 
 
